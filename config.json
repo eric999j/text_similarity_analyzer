@@ -1,0 +1,35 @@
+{
+    "dark_mode": true,
+    "highlight": true,
+    "remove_stopwords": false,
+    "binary_extensions": [
+        ".rar",
+        ".dll",
+        ".7z",
+        ".wav",
+        ".mp3",
+        ".png",
+        ".bin",
+        ".zip",
+        ".pdf",
+        ".exe",
+        ".so",
+        ".jpg"
+    ],
+    "text_extensions": [
+        ".xml",
+        ".py",
+        ".log",
+        ".csv",
+        ".json",
+        ".md",
+        ".txt"
+    ],
+    "audio_extensions": [
+        ".wav",
+        ".flac",
+        ".m4a",
+        ".mp3",
+        ".ogg"
+    ]
+}
