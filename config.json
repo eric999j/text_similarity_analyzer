@@ -1,35 +1,35 @@
 {
     "dark_mode": true,
     "highlight": true,
-    "remove_stopwords": false,
+    "remove_stopwords": true,
     "binary_extensions": [
-        ".rar",
-        ".dll",
-        ".7z",
-        ".wav",
-        ".mp3",
-        ".png",
-        ".bin",
-        ".zip",
         ".pdf",
+        ".wav",
+        ".7z",
         ".exe",
         ".so",
-        ".jpg"
+        ".bin",
+        ".jpg",
+        ".mp3",
+        ".rar",
+        ".zip",
+        ".png",
+        ".dll"
     ],
     "text_extensions": [
-        ".xml",
         ".py",
-        ".log",
         ".csv",
+        ".xml",
         ".json",
+        ".txt",
         ".md",
-        ".txt"
+        ".log"
     ],
     "audio_extensions": [
+        ".ogg",
         ".wav",
         ".flac",
-        ".m4a",
         ".mp3",
-        ".ogg"
+        ".m4a"
     ]
 }

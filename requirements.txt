@@ -1,6 +1,5 @@
 jieba
 numpy
-scikit-learn
 scipy<1.17.0
 sv_ttk
 matplotlib

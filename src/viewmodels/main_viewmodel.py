@@ -3,7 +3,7 @@ import threading
 import os
 from ..models.similarity_model import SimilarityModel
 from ..models.config_model import ConfigModel
-from ..models.audio_similarity_model import AudioSimilarityModel
+from ..models.audio_similarity_model import AudioAnalysisError, AudioSimilarityModel
 
 class MainViewModel:
     def __init__(self):
@@ -24,6 +24,7 @@ class MainViewModel:
         self.audio_path_a = tk.StringVar()
         self.audio_path_b = tk.StringVar()
         self.audio_similarity_score = tk.StringVar(value="等待比對 (Waiting)")
+        self.audio_analysis_detail = tk.StringVar(value="")
         self.audio_method_index = tk.IntVar(value=0) # 0: MFCC, 1: Chroma, 2: Spectral
         
         self.is_dark_mode = tk.BooleanVar(value=self.config_model.dark_mode)
@@ -56,11 +57,25 @@ class MainViewModel:
         self.config_model.dark_mode = self.is_dark_mode.get()
         self.config_model.apply_theme()
         self.config_model.save_config()
+        self.calculate()
 
     def toggle_highlight(self): # Helper for the command
         self.config_model.highlight = self.is_highlight_enabled.get()
         self.config_model.save_config()
         self.calculate()
+
+    def _calculate_text_similarity(self, text_a, text_b, method, remove_stopwords):
+        calculators = {
+            0: self.similarity_model.calculate_standard_cosine,
+            1: self.similarity_model.calculate_sorted_cosine,
+            2: self.similarity_model.calculate_jaccard_similarity,
+            3: self.similarity_model.calculate_levenshtein_similarity,
+            4: self.similarity_model.calculate_tfidf_similarity,
+        }
+        calculator = calculators.get(method)
+        if calculator is None:
+            return 0.0
+        return calculator(text_a, text_b, remove_stopwords)
 
     def _run_on_ui(self, func):
         """Helper to run a function on the main UI thread"""
@@ -88,20 +103,10 @@ class MainViewModel:
                 self.on_highlight_update(set(), set(), set())
             return
 
-        score = 0.0
         remove_stopwords = self.is_remove_stopwords.get()
         method = self.method_index.get()
         
-        if method == 0: # Standard Cosine
-            score = self.similarity_model.calculate_standard_cosine(t1, t2, remove_stopwords)
-        elif method == 1: # Rearrangement Cosine
-            score = self.similarity_model.calculate_sorted_cosine(t1, t2, remove_stopwords)
-        elif method == 2: # Jaccard
-            score = self.similarity_model.calculate_jaccard_similarity(t1, t2, remove_stopwords)
-        elif method == 3: # Levenshtein
-            score = self.similarity_model.calculate_levenshtein_similarity(t1, t2, remove_stopwords)
-        elif method == 4: # TF-IDF
-            score = self.similarity_model.calculate_tfidf_similarity(t1, t2, remove_stopwords)
+        score = self._calculate_text_similarity(t1, t2, method, remove_stopwords)
             
         self.similarity_score.set(f"{score * 100:.2f}%")
         
@@ -321,7 +326,8 @@ class MainViewModel:
                     0: "Standard Cosine",
                     1: "Rearrangement Cosine",
                     2: "Jaccard Similarity",
-                    3: "Levenshtein Distance"
+                    3: "Levenshtein Distance",
+                    4: "TF-IDF Cosine"
                 }
                 method_name = methods.get(self.method_index.get(), "Unknown")
                 stopwords_status = "On" if self.is_remove_stopwords.get() else "Off"
@@ -332,68 +338,54 @@ class MainViewModel:
         except Exception as e:
             print(f"Error saving CSV: {e}")
             return False
-
-
-    def toggle_theme(self):
-        # Update model
-        self.config_model.dark_mode = self.is_dark_mode.get()
-        self.config_model.apply_theme()
-        self.config_model.save_config()
-        # Trigger recalculate to update highlight colors if needed (logic in view)
-        self.calculate()
-
-    def toggle_highlight(self):
-        self.config_model.highlight = self.is_highlight_enabled.get()
-        self.config_model.save_config()
-        self.calculate()
-
     def calculate_audio_similarity(self):
         path_a = self.audio_path_a.get()
         path_b = self.audio_path_b.get()
         
         if not path_a or not path_b:
             self.audio_similarity_score.set("請選擇兩個音訊檔案 (Select 2 files)")
+            self.audio_analysis_detail.set("")
             return
 
         if not os.path.exists(path_a) or not os.path.exists(path_b):
             self.audio_similarity_score.set("檔案不存在 (File not found)")
+            self.audio_analysis_detail.set("")
             return
 
         self.audio_similarity_score.set("計算中... (Calculating...)")
+        self.audio_analysis_detail.set("")
         
         def run_calc():
             try:
-                # Get raw values on thread (safe for get if not modified concurrently)
-                # But better to pass them as args or use .get() before thread start.
-                # However, for simple StringVars, reading in thread is usually ok, 
-                # writing is the main issue. To be 100% safe we could pass args.
-                # Here we already read variables in the main method, oh wait, 
-                # method_idx is read inside. Let's assume reading is fine for now or fix it.
-                # Actually, self.audio_method_index.get() accesses Tcl, better do it on main.
-                
-                # We'll use a local var passed in via closure or args.
-                # But to avoid refactoring too much, let's just wrap updates.
-                
-                # NOTE: Accessing Tk vars from thread is also risky. 
-                # Ideally, we should capture values before starting thread.
-                
                 method = method_idx_val # Use captured value
-                
-                score = 0.0
-                if method == 0: # MFCC
-                    score = self.audio_model.calculate_mfcc_similarity(path_a, path_b)
-                elif method == 1: # Chroma
-                    score = self.audio_model.calculate_chroma_similarity(path_a, path_b)
-                elif method == 2: # Spectral
-                    score = self.audio_model.calculate_spectral_similarity(path_a, path_b)
-                
-                if score is not None:
-                    self._run_on_ui(lambda: self.audio_similarity_score.set(f"{score:.2%}"))
-                else:
-                    self._run_on_ui(lambda: self.audio_similarity_score.set("錯誤 (Error)"))
+                calculators = {
+                    0: self.audio_model.calculate_mfcc_similarity,
+                    1: self.audio_model.calculate_chroma_similarity,
+                    2: self.audio_model.calculate_spectral_similarity,
+                }
+                labels = {
+                    0: "MFCC",
+                    1: "Chroma",
+                    2: "Spectral",
+                }
+
+                calculator = calculators.get(method)
+                if calculator is None:
+                    raise AudioAnalysisError("不支援的音訊比對方法 (Unsupported audio method)")
+
+                score = calculator(path_a, path_b)
+                method_label = labels.get(method, "Audio")
+                self._run_on_ui(lambda: self.audio_similarity_score.set(f"{score:.2%}"))
+                self._run_on_ui(lambda: self.audio_analysis_detail.set(f"{method_label} 分析完成"))
+            except AudioAnalysisError as exc:
+                _msg = str(exc)  # capture before Python 3 deletes the exception variable
+                self._run_on_ui(lambda: self.audio_similarity_score.set("無法計算 (Unavailable)"))
+                self._run_on_ui(lambda: self.audio_analysis_detail.set(_msg))
             except Exception as e:
-                print(f"Audio Calc Error: {e}")
+                _msg = str(e) or "發生未預期錯誤 (Unexpected error)"
+                print(f"Audio Calc Error: {_msg}")
                 self._run_on_ui(lambda: self.audio_similarity_score.set("錯誤 (Error)"))
+                self._run_on_ui(lambda: self.audio_analysis_detail.set(_msg))
 
         # Capture method index before thread start
         method_idx_val = self.audio_method_index.get()

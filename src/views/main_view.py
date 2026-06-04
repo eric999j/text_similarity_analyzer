@@ -23,6 +23,7 @@ class MainView(ttk.Frame):
         
         # Bind plot callback
         self.viewmodel.on_show_frequency_plot = self.show_frequency_plot_window
+        self._text_change_after_id = None
         
         self.pack(fill=tk.BOTH, expand=True)
         
@@ -327,7 +328,12 @@ class MainView(ttk.Frame):
         self.viewmodel.calculate()
 
     def on_text_changed(self, event):
-        # Sync Text widget content to ViewModel
+        if self._text_change_after_id is not None:
+            self.root.after_cancel(self._text_change_after_id)
+        self._text_change_after_id = self.root.after(180, self._flush_text_changes)
+
+    def _flush_text_changes(self):
+        self._text_change_after_id = None
         self.viewmodel.text_a.set(self.text_widget_a.get("1.0", tk.END).strip())
         self.viewmodel.text_b.set(self.text_widget_b.get("1.0", tk.END).strip())
         self.viewmodel.calculate()
@@ -438,6 +444,16 @@ class MainView(ttk.Frame):
         
         ttk.Label(result_frame, text="相似度結果:", font=("Microsoft JhengHei", 14, "bold")).pack(side=tk.LEFT)
         ttk.Label(result_frame, textvariable=self.viewmodel.audio_similarity_score, font=("Arial", 24, "bold"), foreground="green").pack(side=tk.RIGHT, padx=20)
+
+        detail_label = ttk.Label(
+            parent,
+            textvariable=self.viewmodel.audio_analysis_detail,
+            font=("Microsoft JhengHei", 10),
+            justify=tk.LEFT,
+            wraplength=720,
+            foreground="#555555"
+        )
+        detail_label.pack(fill=tk.X, padx=10, pady=(0, 10))
 
     def browse_audio(self, string_var):
         filename = filedialog.askopenfilename(

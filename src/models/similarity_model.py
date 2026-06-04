@@ -1,5 +1,6 @@
 import math
 from collections import Counter
+from collections import OrderedDict
 
 import jieba
 import Levenshtein
@@ -15,22 +16,34 @@ class SimilarityModel:
     }
 
     def __init__(self):
-        pass
+        self._token_cache = OrderedDict()
+        self._token_cache_maxsize = 128
+
+    def _tokenize(self, text):
+        return tuple(raw.strip() for raw in jieba.cut(text) if raw and raw.strip())
+
+    def _get_cached_tokens(self, text, remove_stopwords):
+        cache_key = (text, remove_stopwords)
+        if cache_key in self._token_cache:
+            self._token_cache.move_to_end(cache_key)
+            return self._token_cache[cache_key]
+
+        base_tokens = self._tokenize(text)
+        if remove_stopwords:
+            tokens = tuple(token for token in base_tokens if token not in self.STOPWORDS)
+        else:
+            tokens = base_tokens
+
+        self._token_cache[cache_key] = tokens
+        if len(self._token_cache) > self._token_cache_maxsize:
+            self._token_cache.popitem(last=False)
+        return tokens
 
     def _get_tokens(self, text, remove_stopwords):
         """Helper to tokenize text with optional stopword filtering."""
         if not text:
             return []
-
-        tokens = []
-        for raw in jieba.cut(text):
-            token = raw.strip()
-            if not token:
-                continue
-            if remove_stopwords and token in self.STOPWORDS:
-                continue
-            tokens.append(token)
-        return tokens
+        return self._get_cached_tokens(text, remove_stopwords)
 
     def _get_token_counter(self, text, remove_stopwords):
         return Counter(self._get_tokens(text, remove_stopwords))
